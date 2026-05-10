@@ -28,9 +28,16 @@ def send_telegram(message):
             "parse_mode": "HTML"
         }
         response = requests.post(api_url, json=payload, timeout=10)
-        return response.status_code == 200
+        
+        if response.status_code == 200:
+            log("✅ إشعار مرسل بنجاح")
+            return True
+        else:
+            log(f"❌ فشل الإرسال: {response.status_code} - {response.text}")
+            return False
+            
     except Exception as e:
-        log(f"خطأ في الإرسال: {e}")
+        log(f"❌ خطأ في الإرسال: {str(e)}")
         return False
 
 def check_availability():
@@ -53,10 +60,12 @@ def check_availability():
         has_form = '<form' in page and ('name' in page or 'email' in page or 'phone' in page)
         
         current = is_available or (has_form and not is_unavailable)
+        
+        log(f"فحص: unavailable={is_unavailable}, available={is_available}, has_form={has_form} → الحالة={current}")
         return current
         
     except Exception as e:
-        log(f"خطأ في الفحص: {e}")
+        log(f"❌ خطأ في الفحص: {str(e)}")
         return None
 
 def monitor_loop():
@@ -64,11 +73,24 @@ def monitor_loop():
     is_running = True
     
     log("🚀 بدأت المراقبة!")
+    log(f"توكن موجود: {bool(BOT_TOKEN)}")
+    log(f"Chat ID موجود: {bool(CHAT_ID)}")
     
     # إشعار البدء
-    send_telegram("🔔 <b>بدأت مراقبة الحجز</b>\n\n📍 الموقع: " + URL + "\n⏱️ كل 30 ثانية")
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    start_msg = f"""🔔 <b>بدأت مراقبة الحجز</b>
+
+📍 الموقع: {URL}
+⏱️ كل 30 ثانية
+
+📅 {now}"""
+    
+    success = send_telegram(start_msg)
+    log(f"إشعار البدء: {'✅ نجح' if success else '❌ فشل'}")
     
     while is_running:
+        time.sleep(CHECK_INTERVAL)
+        
         status = check_availability()
         
         if status is not None and status != last_status:
@@ -89,9 +111,7 @@ def monitor_loop():
             
             send_telegram(msg)
             last_status = status
-            log(f"تغير الحالة: {'متوفر' if status else 'غير متوفر'}")
-        
-        time.sleep(CHECK_INTERVAL)
+            log(f"🔄 تغير الحالة: {'متوفر' if status else 'غير متوفر'}")
 
 @app.route('/')
 def home():
@@ -100,6 +120,7 @@ def home():
     <h1>🤖 Adhahi Monitor</h1>
     <p>الحالة: {status_text}</p>
     <p>آخر فحص: {datetime.now().strftime('%H:%M:%S')}</p>
+    <p>يعمل: {'نعم' if is_running else 'لا'}</p>
     """
 
 @app.route('/health')
