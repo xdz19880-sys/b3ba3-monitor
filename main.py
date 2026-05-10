@@ -33,7 +33,7 @@ def send_telegram(message):
             log("✅ إشعار مرسل بنجاح")
             return True
         else:
-            log(f"❌ فشل الإرسال: {response.status_code} - {response.text}")
+            log(f"❌ فشل الإرسال: {response.status_code}")
             return False
             
     except Exception as e:
@@ -48,20 +48,14 @@ def check_availability():
         response = requests.get(URL, headers=headers, timeout=15)
         page = response.text.lower()
         
-        # كلمات تشير لعدم التوفر
         unavailable = ['غير متوفر', 'مكتمل', 'لا يوجد حجز', 'نفدت', 'disabled', 'closed', 'full']
-        # كلمات تشير للتوفر  
         available = ['متوفر', 'متاح', 'سجل', 'register', 'available', 'open']
         
         is_unavailable = any(word in page for word in unavailable)
         is_available = any(word in page for word in available)
-        
-        # إذا كان الموقع يحتوي على نموذج تسجيل فهو متاح
         has_form = '<form' in page and ('name' in page or 'email' in page or 'phone' in page)
         
         current = is_available or (has_form and not is_unavailable)
-        
-        log(f"فحص: unavailable={is_unavailable}, available={is_available}, has_form={has_form} → الحالة={current}")
         return current
         
     except Exception as e:
@@ -87,7 +81,7 @@ def monitor_loop():
     
     success = send_telegram(start_msg)
     log(f"إشعار البدء: {'✅ نجح' if success else '❌ فشل'}")
-    
+
     while is_running:
         time.sleep(CHECK_INTERVAL)
         
@@ -127,11 +121,10 @@ def home():
 def health():
     return {"status": "ok", "monitoring": is_running}
 
+# ✅ تشغيل المراقبة فوراً (حتى مع gunicorn)
+monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
+monitor_thread.start()
+
 if __name__ == '__main__':
-    # تشغيل المراقبة في خيط منفصل
-    monitor_thread = threading.Thread(target=monitor_loop, daemon=True)
-    monitor_thread.start()
-    
-    # تشغيل الخادم
     port = int(os.environ.get('PORT', 5000))
     app.run(host='0.0.0.0', port=port)
